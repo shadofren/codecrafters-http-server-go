@@ -41,12 +41,23 @@ func handle(conn net.Conn) {
 			fmt.Println("Error writing response: ", err.Error())
 			os.Exit(1)
 		}
+	} else if strings.HasPrefix(path, "/echo/") {
+		body := path[6:]
+		size := len(body)
+		response := fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %d\r\n\r\n%s",
+			size, body)
+		_, err = conn.Write([]byte(response))
+		if err != nil {
+			fmt.Println("Error writing response: ", err.Error())
+			os.Exit(1)
+		}
+
 	} else {
 		_, err = conn.Write([]byte(notFoundResponse))
 		if err != nil {
 			fmt.Println("Error writing response: ", err.Error())
 			os.Exit(1)
 		}
-  }
+	}
 
 }

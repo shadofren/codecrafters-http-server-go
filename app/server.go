@@ -29,29 +29,47 @@ func main() {
 	}
 }
 
+func parseRequest(conn net.Conn) Request {
+  req := Request{}
+	reqByte := make([]byte, 4096)
+  n, _ := conn.Read(reqByte)
+  // remove the null bytes
+  reqByte = reqByte[:n]
+	lines := strings.Split(string(reqByte), "\r\n")
+  startLine := lines[0]
+  components := strings.Split(startLine, " ")
+  req.Method = components[0]
+  req.Path = components[1]
+  req.Headers = make(map[string]string)
+  for _, line := range lines[1:] {
+    if line == "" {
+      break
+    }
+    parts := strings.Split(line, ": ")
+    req.Headers[parts[0]] = parts[1]
+  }
+  req.Body = []byte(lines[len(lines)-1])
+  return req
+}
+
 func handle(conn net.Conn) {
 	defer conn.Close()
-	req := make([]byte, 1024)
-	conn.Read(req)
-	reqData := strings.Split(string(req), "\r\n")
-	path := strings.Split(reqData[0], " ")[1]
-	var body string
-	if path == "/" {
+	var resp string
+  req := parseRequest(conn)
+	if req.Path == "/" {
 		ok(conn, "")
-	} else if path == "/user-agent" {
-		for _, line := range reqData {
-			if strings.HasPrefix(line, "User-Agent") {
-				body = strings.TrimPrefix(line, "User-Agent: ")
-				break
-			}
+	} else if req.Path == "/user-agent" {
+		ok(conn, req.Headers["User-Agent"])
+	} else if strings.HasPrefix(req.Path, "/echo/") {
+		resp = req.Path[6:]
+		ok(conn, resp)
+	} else if strings.HasPrefix(req.Path, "/files/") {
+		filename := req.Path[7:]
+		if req.Method == "GET" {
+			file(conn, filename)
+		} else {
+			upload(conn, filename, req.Body)
 		}
-		ok(conn, body)
-	} else if strings.HasPrefix(path, "/echo/") {
-		body = path[6:]
-		ok(conn, body)
-	} else if strings.HasPrefix(path, "/files/") {
-		filename := path[7:]
-		file(conn, filename)
 	} else {
 		notfound(conn)
 	}
@@ -96,5 +114,33 @@ func file(conn net.Conn, filename string) {
 		fmt.Println("Error writing response: ", err.Error())
 		os.Exit(1)
 	}
+}
 
+func upload(conn net.Conn, filename string, body []byte) {
+	filePath := filepath.Join(*dirFlag, filename)
+  file, err := os.Create(filePath)
+  if err != nil {
+    fmt.Errorf("can't create file %v\n", filename)
+    notfound(conn)
+  }
+  defer file.Close()
+  fmt.Println("writing", len(body))
+  _, err = file.Write(body)
+  if err != nil {
+    fmt.Errorf("can't write to file %v\n", filename)
+    notfound(conn)
+  }
+  response := "HTTP/1.1 201 Created\r\nContent-Length: 0\r\n\r\n"
+	_, err = conn.Write([]byte(response))
+	if err != nil {
+		fmt.Println("Error writing response: ", err.Error())
+		os.Exit(1)
+	}
+}
+
+type Request struct {
+	Method  string
+	Path    string
+	Headers map[string]string
+	Body    []byte
 }

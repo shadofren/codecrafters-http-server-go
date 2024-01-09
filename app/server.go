@@ -19,16 +19,18 @@ func main() {
 		os.Exit(1)
 	}
 
-	conn, err := l.Accept()
-	if err != nil {
-		fmt.Println("Error accepting connection: ", err.Error())
-		os.Exit(1)
+	for {
+		conn, err := l.Accept()
+		if err != nil {
+			fmt.Println("Error accepting connection: ", err.Error())
+			os.Exit(1)
+		}
+		go handle(conn)
 	}
-	defer conn.Close()
-	handle(conn)
 }
 
 func handle(conn net.Conn) {
+  defer conn.Close()
 	req := make([]byte, 1024)
 	conn.Read(req)
 	reqData := strings.Split(string(req), "\r\n")
@@ -64,7 +66,7 @@ func ok(conn net.Conn, body string) {
 
 func notfound(conn net.Conn) {
 	notFoundResponse := "HTTP/1.1 404 Not Found\r\n\r\n"
-  _, err := conn.Write([]byte(notFoundResponse))
+	_, err := conn.Write([]byte(notFoundResponse))
 	if err != nil {
 		fmt.Println("Error writing response: ", err.Error())
 		os.Exit(1)

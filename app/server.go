@@ -30,34 +30,44 @@ func main() {
 
 func handle(conn net.Conn) {
 	req := make([]byte, 1024)
-	_, err := conn.Read(req)
+	conn.Read(req)
 	reqData := strings.Split(string(req), "\r\n")
 	path := strings.Split(reqData[0], " ")[1]
-	okResponse := "HTTP/1.1 200 OK\r\n\r\n"
-	notFoundResponse := "HTTP/1.1 404 Not Found\r\n\r\n"
+	var body string
 	if path == "/" {
-		_, err = conn.Write([]byte(okResponse))
-		if err != nil {
-			fmt.Println("Error writing response: ", err.Error())
-			os.Exit(1)
+		ok(conn, "")
+	} else if path == "/user-agent" {
+		for _, line := range reqData {
+			if strings.HasPrefix(line, "User-Agent") {
+				body = strings.TrimPrefix(line, "User-Agent: ")
+				break
+			}
 		}
+		ok(conn, body)
 	} else if strings.HasPrefix(path, "/echo/") {
-		body := path[6:]
-		size := len(body)
-		response := fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %d\r\n\r\n%s",
-			size, body)
-		_, err = conn.Write([]byte(response))
-		if err != nil {
-			fmt.Println("Error writing response: ", err.Error())
-			os.Exit(1)
-		}
-
+		body = path[6:]
+		ok(conn, body)
 	} else {
-		_, err = conn.Write([]byte(notFoundResponse))
-		if err != nil {
-			fmt.Println("Error writing response: ", err.Error())
-			os.Exit(1)
-		}
+		notfound(conn)
+	}
+}
+
+func ok(conn net.Conn, body string) {
+	response := fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %d\r\n\r\n%s",
+		len(body), body)
+	_, err := conn.Write([]byte(response))
+	if err != nil {
+		fmt.Println("Error writing response: ", err.Error())
+		os.Exit(1)
+	}
+}
+
+func notfound(conn net.Conn) {
+	notFoundResponse := "HTTP/1.1 404 Not Found\r\n\r\n"
+  _, err := conn.Write([]byte(notFoundResponse))
+	if err != nil {
+		fmt.Println("Error writing response: ", err.Error())
+		os.Exit(1)
 	}
 
 }

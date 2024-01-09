@@ -1,23 +1,23 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"net"
 	"os"
+	"path/filepath"
 	"strings"
 )
 
-func main() {
-	// You can use print statements as follows for debugging, they'll be visible when running tests.
-	fmt.Println("Logs from your program will appear here!")
+var dirFlag = flag.String("directory", ".", "directory to serve files from")
 
-	// Uncomment this block to pass the first stage
-	//
+func main() {
 	l, err := net.Listen("tcp", "0.0.0.0:4221")
 	if err != nil {
 		fmt.Println("Failed to bind to port 4221")
 		os.Exit(1)
 	}
+	flag.Parse()
 
 	for {
 		conn, err := l.Accept()
@@ -30,7 +30,7 @@ func main() {
 }
 
 func handle(conn net.Conn) {
-  defer conn.Close()
+	defer conn.Close()
 	req := make([]byte, 1024)
 	conn.Read(req)
 	reqData := strings.Split(string(req), "\r\n")
@@ -49,6 +49,9 @@ func handle(conn net.Conn) {
 	} else if strings.HasPrefix(path, "/echo/") {
 		body = path[6:]
 		ok(conn, body)
+	} else if strings.HasPrefix(path, "/files/") {
+		filename := path[7:]
+		file(conn, filename)
 	} else {
 		notfound(conn)
 	}
@@ -67,6 +70,28 @@ func ok(conn net.Conn, body string) {
 func notfound(conn net.Conn) {
 	notFoundResponse := "HTTP/1.1 404 Not Found\r\n\r\n"
 	_, err := conn.Write([]byte(notFoundResponse))
+	if err != nil {
+		fmt.Println("Error writing response: ", err.Error())
+		os.Exit(1)
+	}
+
+}
+
+func file(conn net.Conn, filename string) {
+	filePath := filepath.Join(*dirFlag, filename)
+	_, err := os.Stat(filePath)
+	if err != nil {
+		notfound(conn)
+		return
+	}
+	content, err := os.ReadFile(filePath)
+	if err != nil {
+		notfound(conn)
+		return
+	}
+	response := fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nContent-Length: %d\r\n\r\n%s",
+		len(content), content)
+	_, err = conn.Write([]byte(response))
 	if err != nil {
 		fmt.Println("Error writing response: ", err.Error())
 		os.Exit(1)

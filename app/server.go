@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strings"
 )
 
 func main() {
@@ -23,11 +24,29 @@ func main() {
 		fmt.Println("Error accepting connection: ", err.Error())
 		os.Exit(1)
 	}
-  defer conn.Close()
-  response := "HTTP/1.1 200 OK\r\n\r\n"
-  _, err = conn.Write([]byte(response))
-  if err != nil {
-    fmt.Println("Error writing response: ", err.Error())
-    os.Exit(1)
+	defer conn.Close()
+	handle(conn)
+}
+
+func handle(conn net.Conn) {
+	req := make([]byte, 1024)
+	_, err := conn.Read(req)
+	reqData := strings.Split(string(req), "\r\n")
+	path := strings.Split(reqData[0], " ")[1]
+	okResponse := "HTTP/1.1 200 OK\r\n\r\n"
+	notFoundResponse := "HTTP/1.1 404 Not Found\r\n\r\n"
+	if path == "/" {
+		_, err = conn.Write([]byte(okResponse))
+		if err != nil {
+			fmt.Println("Error writing response: ", err.Error())
+			os.Exit(1)
+		}
+	} else {
+		_, err = conn.Write([]byte(notFoundResponse))
+		if err != nil {
+			fmt.Println("Error writing response: ", err.Error())
+			os.Exit(1)
+		}
   }
+
 }
